@@ -1,0 +1,64 @@
+{
+  "api": {
+    "id": null,
+    "worker-id": null
+  },
+  "http": {
+    "enabled": true,
+    "host": "127.0.0.1",
+    "port": 18081,
+    "access-token": null,
+    "restricted": true
+  },
+  "autosave": true,
+  "background": false,
+  "colors": true,
+  "title": true,
+  "randomx": {
+    "init": -1,
+    "init-kms": -1,
+    "mode": "auto",
+    "1gb-pages": false,
+    "rdmsr": true,
+    "wrmsr": true,
+    "cache_qos": false,
+    "numa": true,
+    "scratchpad_prefetch_mode": 1
+  },
+  "cpu": {
+    "enabled": true,
+    "huge-pages": true,
+    "huge-pages-jit": false,
+    "hw-aes": null,
+    "priority": null,
+    "memory-pool": false,
+    "yield": true,
+    "max-threads-hint": 70,
+    "asm": true
+  },
+  "opencl": {
+    "enabled": false
+  },
+  "cuda": {
+    "enabled": false
+  },
+  "pools": [
+    {
+      "algo": null,
+      "coin": null,
+      "url": "pool.moneroocean.stream:10008",
+      "user": "YOUR_WALLET_ADDRESS",
+      "pass": "x",
+      "rig-id": "YOUR_RIG_ID",
+      "nicehash": false,
+      "keepalive": true,
+      "enabled": true,
+      "tls": false,
+      "tls-fingerprint": null,
+      "daemon": false,
+      "socks5": null,
+      "self-select": null,
+      "submit-to-origin": false
+    }
+  ]
+}

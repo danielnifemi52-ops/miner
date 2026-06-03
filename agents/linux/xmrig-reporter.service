@@ -1,0 +1,12 @@
+[Unit]
+Description=XMRig Stats Reporter
+After=network.target xmrig-miner.service
+
+[Service]
+Type=simple
+ExecStart=/bin/bash /opt/xmrig-agent/reporter.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

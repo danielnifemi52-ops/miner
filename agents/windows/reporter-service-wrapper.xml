@@ -1,0 +1,12 @@
+<service>
+  <id>xmrig-reporter</id>
+  <name>XMRig Stats Reporter</name>
+  <description>Monitors and reports mining performance to the coordinator</description>
+  <executable>powershell.exe</executable>
+  <arguments>-ExecutionPolicy Bypass -File "%BASE%\reporter.ps1"</arguments>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>5</keepFiles>
+  </log>
+  <onfailure action="restart" delay="10 sec"/>
+</service>

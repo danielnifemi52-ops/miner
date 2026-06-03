@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>⛏ Web Miner</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-color: #0c0919;
+      --card-bg: rgba(26, 21, 48, 0.45);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --primary: #f59e0b;
+      --primary-glow: rgba(245, 158, 11, 0.4);
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --success: #10b981;
+      --danger: #ef4444;
+      --info: #3b82f6;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(31, 23, 71, 0.5) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(20, 10, 48, 0.8) 0px, transparent 50%);
+      font-family: 'Outfit', sans-serif;
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      overflow-x: hidden;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 500px;
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 24px;
+      padding: 40px 30px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 
+                  inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      position: relative;
+    }
+
+    .container::after {
+      content: '';
+      position: absolute;
+      top: -2px;
+      left: -2px;
+      right: -2px;
+      bottom: -2px;
+      background: linear-gradient(135deg, var(--primary), transparent 40%, transparent 60%, var(--primary));
+      border-radius: 26px;
+      z-index: -1;
+      opacity: 0.15;
+      pointer-events: none;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 35px;
+    }
+
+    header h1 {
+      font-size: 36px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+      background: linear-gradient(to right, #ffffff, var(--primary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      border-radius: 30px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      transition: all 0.3s ease;
+    }
+
+    .status-badge.stopped {
+      color: var(--danger);
+      box-shadow: 0 0 10px rgba(239, 68, 68, 0.1);
+    }
+
+    .status-badge.connecting {
+      color: var(--info);
+      box-shadow: 0 0 10px rgba(59, 130, 246, 0.1);
+    }
+
+    .status-badge.mining {
+      color: var(--success);
+      box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: currentColor;
+    }
+
+    .status-badge.mining .status-dot {
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 0.3; }
+      50% { opacity: 1; }
+      100% { opacity: 0.3; }
+    }
+
+    .hashrate-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 18px;
+      padding: 24px;
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .hashrate-title {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 5px;
+    }
+
+    .hashrate-value {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 46px;
+      font-weight: bold;
+      color: #ffffff;
+      text-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+    }
+
+    .hashrate-unit {
+      font-size: 16px;
+      color: var(--primary);
+      margin-left: 4px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    input[type="text"], input[type="url"], input[type="password"] {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 14px;
+      font-family: inherit;
+      color: #ffffff;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-glow);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .slider-container {
+      margin: 25px 0 30px 0;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .slider-value {
+      font-family: 'Share Tech Mono', monospace;
+      font-weight: bold;
+      color: var(--primary);
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.1);
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--primary);
+      cursor: pointer;
+      box-shadow: 0 0 10px var(--primary-glow);
+      transition: transform 0.1s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    button.btn-action {
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    button.btn-action.start {
+      background: var(--primary);
+      color: #0c0919;
+      box-shadow: 0 10px 20px rgba(245, 158, 11, 0.2);
+    }
+
+    button.btn-action.start:hover {
+      background: #fbbf24;
+      box-shadow: 0 10px 25px rgba(245, 158, 11, 0.35);
+      transform: translateY(-2px);
+    }
+
+    button.btn-action.stop {
+      background: var(--danger);
+      color: #ffffff;
+      box-shadow: 0 10px 20px rgba(239, 68, 68, 0.2);
+    }
+
+    button.btn-action.stop:hover {
+      background: #f87171;
+      box-shadow: 0 10px 25px rgba(239, 68, 68, 0.35);
+      transform: translateY(-2px);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 30px;
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .uptime-display {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>⛏ Miner</h1>
+      <div id="statusBadge" class="status-badge stopped">
+        <div class="status-dot"></div>
+        <span id="statusText">Stopped</span>
+      </div>
+    </header>
+
+    <div class="hashrate-card">
+      <div class="hashrate-title">Hashrate</div>
+      <div class="hashrate-value"><span id="hashrateDisplay">0</span><span class="hashrate-unit">H/s</span></div>
+      <div id="uptimeDisplay" class="uptime-display" style="display: none;">Uptime: 0s</div>
+    </div>
+
+    <form id="minerForm">
+      <div class="form-group">
+        <label for="workerName">Worker Name</label>
+        <input type="text" id="workerName" placeholder="Enter worker name" required>
+      </div>
+
+      <div class="form-group">
+        <label for="coordinatorUrl">Coordinator URL</label>
+        <input type="url" id="coordinatorUrl" placeholder="http://localhost:3000" required>
+      </div>
+
+      <div class="form-group">
+        <label for="agentSecret">Agent Secret</label>
+        <input type="password" id="agentSecret" placeholder="Enter agent secret" required>
+      </div>
+
+      <div class="slider-container">
+        <div class="slider-header">
+          <label for="throttle">CPU Throttle Limit</label>
+          <span class="slider-value" id="throttleValue">50%</span>
+        </div>
+        <input type="range" id="throttle" min="10" max="80" value="50" step="5">
+      </div>
+
+      <button type="submit" id="btnAction" class="btn-action start">Start Mining</button>
+    </form>
+
+    <footer>
+      Mining Monero (XMR) for the pool.<br>
+      Config is fetched automatically from Coordinator.
+    </footer>
+  </div>
+
+  <!-- Load WorkerReporter -->
+  <script src="worker-reporter.js"></script>
+  
+  <script>
+    // Prefill default inputs
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    document.getElementById('workerName').value = `Web_Miner_${randomSuffix}`;
+    document.getElementById('coordinatorUrl').value = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')
+      ? 'http://localhost:3000' 
+      : window.location.origin;
+
+    // Slider display listener
+    const throttleSlider = document.getElementById('throttle');
+    const throttleValueText = document.getElementById('throttleValue');
+    throttleSlider.addEventListener('input', (e) => {
+      throttleValueText.textContent = `${e.target.value}%`;
+      if (minerWorker) {
+        minerWorker.postMessage({
+          type: 'set_throttle',
+          data: { throttle: parseFloat(e.target.value) / 100 }
+        });
+      }
+    });
+
+    let minerWorker = null;
+    let statsTimer = null;
+    let isMining = false;
+    let workerId = null;
+    let currentHashrate = 0;
+    let uptimeSecs = 0;
+    let uptimeTimer = null;
+
+    const form = document.getElementById('minerForm');
+    const btnAction = document.getElementById('btnAction');
+    const statusBadge = document.getElementById('statusBadge');
+    const statusText = document.getElementById('statusText');
+    const hashrateDisplay = document.getElementById('hashrateDisplay');
+    const uptimeDisplay = document.getElementById('uptimeDisplay');
+
+    function updateStatus(state, message) {
+      statusBadge.className = `status-badge ${state}`;
+      statusText.textContent = message;
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (isMining) {
+        stopMining();
+        return;
+      }
+
+      const name = document.getElementById('workerName').value.trim();
+      const coordUrl = document.getElementById('coordinatorUrl').value.trim();
+      const secret = document.getElementById('agentSecret').value.trim();
+      const throttlePercent = parseFloat(throttleSlider.value) / 100;
+
+      btnAction.disabled = true;
+      updateStatus('connecting', 'Connecting...');
+
+      try {
+        // Initialize reporter
+        WorkerReporter.init(coordUrl, secret);
+
+        // Fetch pool config
+        const config = await WorkerReporter.fetchConfig();
+        const pool = config.pool;
+        const wallet = config.wallet;
+
+        if (!wallet) {
+          throw new Error("No wallet configured on Coordinator. Set it on the Dashboard Settings.");
+        }
+
+        // Register worker
+        const workerInfo = await WorkerReporter.register(name);
+        workerId = workerInfo.id;
+
+        // Start Web Worker
+        minerWorker = new Worker('miner.js');
+        minerWorker.postMessage({
+          type: 'start',
+          data: {
+            pool: pool,
+            wallet: wallet,
+            throttle: throttlePercent
+          }
+        });
+
+        // Listen for hashrate reports
+        minerWorker.onmessage = (e) => {
+          if (e.data.type === 'hashrate') {
+            currentHashrate = e.data.hashrate;
+            hashrateDisplay.textContent = currentHashrate;
+          }
+        };
+
+        // Reset Uptime
+        uptimeSecs = 0;
+        uptimeDisplay.textContent = `Uptime: 0s`;
+        uptimeDisplay.style.display = 'block';
+        uptimeTimer = setInterval(() => {
+          uptimeSecs++;
+          const d = Math.floor(uptimeSecs / 86400);
+          const h = Math.floor((uptimeSecs % 86400) / 3600);
+          const m = Math.floor((uptimeSecs % 3600) / 60);
+          const s = uptimeSecs % 60;
+          if (d > 0) uptimeDisplay.textContent = `Uptime: ${d}d ${h}h ${m}m`;
+          else if (h > 0) uptimeDisplay.textContent = `Uptime: ${h}h ${m}m ${s}s`;
+          else uptimeDisplay.textContent = `Uptime: ${m}m ${s}s`;
+        }, 1000);
+
+        // Stats reporting loop (60s)
+        statsTimer = setInterval(async () => {
+          try {
+            await WorkerReporter.reportStats(workerId, currentHashrate, uptimeSecs);
+          } catch (err) {
+            console.error("Stats reporting failed:", err);
+          }
+        }, 60000);
+
+        // Toggle state
+        isMining = true;
+        updateStatus('mining', 'Mining');
+        btnAction.textContent = 'Stop Mining';
+        btnAction.className = 'btn-action stop';
+        
+        // Lock inputs
+        document.getElementById('workerName').disabled = true;
+        document.getElementById('coordinatorUrl').disabled = true;
+        document.getElementById('agentSecret').disabled = true;
+
+      } catch (err) {
+        console.error(err);
+        alert(`Error starting miner: ${err.message}`);
+        updateStatus('stopped', 'Stopped');
+        stopMining();
+      } finally {
+        btnAction.disabled = false;
+      }
+    });
+
+    function stopMining() {
+      if (minerWorker) {
+        minerWorker.terminate();
+        minerWorker = null;
+      }
+      if (statsTimer) {
+        clearInterval(statsTimer);
+        statsTimer = null;
+      }
+      if (uptimeTimer) {
+        clearInterval(uptimeTimer);
+        uptimeTimer = null;
+      }
+
+      isMining = false;
+      currentHashrate = 0;
+      hashrateDisplay.textContent = '0';
+      uptimeDisplay.style.display = 'none';
+      updateStatus('stopped', 'Stopped');
+      btnAction.textContent = 'Start Mining';
+      btnAction.className = 'btn-action start';
+      
+      // Unlock inputs
+      document.getElementById('workerName').disabled = false;
+      document.getElementById('coordinatorUrl').disabled = false;
+      document.getElementById('agentSecret').disabled = false;
+    }
+  </script>
+</body>
+</html>

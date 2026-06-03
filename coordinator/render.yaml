@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: distributed-miner-coordinator
+    runtime: node
+    plan: free
+    buildCommand: cd coordinator/server && npm install
+    startCommand: cd coordinator/server && npm start
+    envVars:
+      - key: ADMIN_PASSWORD
+        scope: run
+      - key: JWT_SECRET
+        scope: run
+      - key: AGENT_SECRET
+        scope: run
+      - key: SUPABASE_URL
+        scope: run
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        scope: run
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000

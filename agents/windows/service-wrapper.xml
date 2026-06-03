@@ -1,0 +1,12 @@
+<service>
+  <id>xmrig-miner</id>
+  <name>XMRig Mining Service</name>
+  <description>Background CPU mining service for Monero</description>
+  <executable>%BASE%\xmrig.exe</executable>
+  <arguments>--config=%BASE%\config.json</arguments>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>5</keepFiles>
+  </log>
+  <onfailure action="restart" delay="10 sec"/>
+</service>
