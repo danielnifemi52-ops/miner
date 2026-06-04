@@ -55,6 +55,13 @@ Log-Message "Worker ID: $WorkerId"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
 
 $LoopCount = 0
+
+# Track last applied remote config values to detect real changes.
+# Use sentinel values so the very first sync always writes a clean config.
+$LastKnownPool   = $null
+$LastKnownWallet = $null
+$LastKnownCpu    = $null
+
 while ($true) {
     # Get stats from XMRig HTTP API
     $Hashrate = 0.0
@@ -118,42 +125,61 @@ while ($true) {
             $RemoteConfig = Invoke-RestMethod -Uri $ConfigUri -Method Get -Headers $Headers -TimeoutSec 10
             
             if ($RemoteConfig -and $RemoteConfig.pool) {
-                # Load current local config
-                if (Test-Path $XmrigConfigFile) {
-                    $LocalConfig = Get-Content $XmrigConfigFile -Raw | ConvertFrom-Json
-                    
-                    # Check if config differs
-                    $ConfigChanged = $false
-                    
-                    # Check pool
-                    if ($LocalConfig.pools[0].url -ne $RemoteConfig.pool) { $ConfigChanged = $true }
-                    # Check wallet
-                    if ($LocalConfig.pools[0].user -ne $RemoteConfig.wallet) { $ConfigChanged = $true }
-                    # Check cpu limit
-                    if ($LocalConfig.cpu."max-threads-hint" -ne $RemoteConfig.cpu_max_percent) { $ConfigChanged = $true }
+                # Cast remote values to strings for stable comparison
+                $RemotePool   = [string]$RemoteConfig.pool
+                $RemoteWallet = [string]$RemoteConfig.wallet
+                $RemoteCpu    = [string]$RemoteConfig.cpu_max_percent
 
-                    if ($ConfigChanged) {
-                        Log-Message "Configuration change detected from coordinator. Updating local configuration..."
-                        
-                        # Load template
-                        if (Test-Path $TemplateFile) {
-                            $Template = Get-Content $TemplateFile -Raw | ConvertFrom-Json
-                        } else {
-                            $Template = $LocalConfig
-                        }
-                        
-                        # Apply new settings
-                        $Template.pools[0].url = $RemoteConfig.pool
-                        $Template.pools[0].user = $RemoteConfig.wallet
-                        $Template.pools[0].pass = "x"
-                        $Template.pools[0]."rig-id" = $LocalConfig.pools[0]."rig-id" # Preserve worker name
-                        $Template.cpu."max-threads-hint" = $RemoteConfig.cpu_max_percent
-                        
-                        Write-ContentNoBom $XmrigConfigFile ($Template | ConvertTo-Json -Depth 10)
-                        
-                        Log-Message "Restarting XMRig Mining Service to apply changes..."
-                        Restart-Service -Name "xmrig-miner" -Force
-                        Log-Message "XMRig service restarted successfully."
+                # Only flag a change when values actually differ from what we last applied
+                $ConfigChanged = (
+                    $RemotePool   -ne $LastKnownPool   -or
+                    $RemoteWallet -ne $LastKnownWallet  -or
+                    $RemoteCpu    -ne $LastKnownCpu
+                )
+
+                if ($ConfigChanged) {
+                    Log-Message "Configuration change detected from coordinator (pool='$RemotePool', wallet='$RemoteWallet', cpu='$RemoteCpu'). Updating local configuration..."
+                    
+                    # Load template (preferred) or fall back to current config
+                    if (Test-Path $TemplateFile) {
+                        $Template = Get-Content $TemplateFile -Raw | ConvertFrom-Json
+                    } elseif (Test-Path $XmrigConfigFile) {
+                        $Template = Get-Content $XmrigConfigFile -Raw | ConvertFrom-Json
+                    } else {
+                        Log-Message "Error: neither config-template.json nor config.json found. Skipping update."
+                        throw "No config template available"
+                    }
+
+                    # Preserve rig-id from existing config if present
+                    $RigId = $null
+                    if (Test-Path $XmrigConfigFile) {
+                        try {
+                            $Existing = Get-Content $XmrigConfigFile -Raw | ConvertFrom-Json
+                            $RigId = $Existing.pools[0]."rig-id"
+                        } catch { }
+                    }
+
+                    # Apply new settings
+                    $Template.pools[0].url  = $RemotePool
+                    $Template.pools[0].user = $RemoteWallet
+                    $Template.pools[0].pass = "x"
+                    if ($RigId) { $Template.pools[0]."rig-id" = $RigId }
+                    $Template.cpu."max-threads-hint" = [int]$RemoteCpu
+
+                    Write-ContentNoBom $XmrigConfigFile ($Template | ConvertTo-Json -Depth 10)
+
+                    # Persist the values we just applied so next cycle doesn't re-trigger
+                    $LastKnownPool   = $RemotePool
+                    $LastKnownWallet = $RemoteWallet
+                    $LastKnownCpu    = $RemoteCpu
+
+                    Log-Message "Restarting XMRig Mining Service to apply changes..."
+                    Restart-Service -Name "xmrig-miner" -Force
+                    Log-Message "XMRig service restarted successfully."
+                } else {
+                    # Values unchanged – no restart needed
+                    if ($LoopCount % 25 -eq 0) {
+                        Log-Message "Config sync OK – no changes (pool='$RemotePool', cpu='$RemoteCpu')"
                     }
                 }
             }
