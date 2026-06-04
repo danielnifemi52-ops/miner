@@ -4,6 +4,8 @@
 .env.development
 .env.production
 .env.*.local
+.env.example
+.env.*.example
 
 # Dependencies
 node_modules/
@@ -60,6 +62,6 @@ install.log
 
 # Project-specific files
 .env.example
-plan.md
-setup.bat
-setup.sh
+.PLAN.md
+.setup.bat
+.setup.sh
