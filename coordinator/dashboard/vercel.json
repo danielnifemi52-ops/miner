@@ -1,7 +1,1 @@
-@"
-{
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
-}
-"@ | Out-File -FilePath vercel.json -Encoding utf8
+{"rewrites":[{"source":"/(.*)","destination":"/index.html"}]}
