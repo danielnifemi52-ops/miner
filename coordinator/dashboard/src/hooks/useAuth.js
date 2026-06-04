@@ -1,25 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 export const useAuth = () => {
-  const [token, setToken] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // Read token synchronously — no useEffect, no async gap.
+  // token state is initialised directly from localStorage so it is
+  // correct on the very first render (prevents the flash-redirect bug).
+  const [token, setToken] = useState(() => localStorage.getItem('token'));
 
-  useEffect(() => {
-    // Check localStorage for token on mount
-    const storedToken = localStorage.getItem('token');
-    if (storedToken) {
-      try {
-        // Validate token is not expired (basic check)
-        const parts = storedToken.split('.');
-        if (parts.length === 3) {
-          setToken(storedToken);
-        }
-      } catch (err) {
-        localStorage.removeItem('token');
-      }
-    }
-    setLoading(false);
-  }, []);
+  const isAuthenticated = () => {
+    return !!localStorage.getItem('token');
+  };
 
   const login = (newToken) => {
     localStorage.setItem('token', newToken);
@@ -32,5 +21,5 @@ export const useAuth = () => {
     setToken(null);
   };
 
-  return { token, loading, login, logout };
+  return { token, isAuthenticated, login, logout };
 };
