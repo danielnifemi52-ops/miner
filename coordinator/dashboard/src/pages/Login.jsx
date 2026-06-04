@@ -20,7 +20,7 @@ function Login() {
       const response = await apiClient.post('/auth/login', { password });
       const { token } = response.data;
       login(token);
-      navigate('/');
+      navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed');
     } finally {

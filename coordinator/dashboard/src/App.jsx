@@ -1,11 +1,10 @@
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import { useAuth } from './hooks/useAuth';
 
 const ProtectedRoute = ({ element }) => {
-  const { token } = useAuth();
-  return token ? element : <Navigate to="/login" />;
+  const token = localStorage.getItem('token');
+  return token ? element : <Navigate to="/login" replace />;
 };
 
 const router = createBrowserRouter([
@@ -14,8 +13,12 @@ const router = createBrowserRouter([
     element: <Login />,
   },
   {
-    path: '/',
+    path: '/dashboard',
     element: <ProtectedRoute element={<Dashboard />} />,
+  },
+  {
+    path: '/',
+    element: <Navigate to="/dashboard" replace />,
   },
 ]);
 

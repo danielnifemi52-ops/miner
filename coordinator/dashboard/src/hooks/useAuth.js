@@ -6,7 +6,7 @@ export const useAuth = () => {
 
   useEffect(() => {
     // Check localStorage for token on mount
-    const storedToken = localStorage.getItem('auth_token');
+    const storedToken = localStorage.getItem('token');
     if (storedToken) {
       try {
         // Validate token is not expired (basic check)
@@ -15,19 +15,20 @@ export const useAuth = () => {
           setToken(storedToken);
         }
       } catch (err) {
-        localStorage.removeItem('auth_token');
+        localStorage.removeItem('token');
       }
     }
     setLoading(false);
   }, []);
 
   const login = (newToken) => {
-    localStorage.setItem('auth_token', newToken);
+    localStorage.setItem('token', newToken);
     setToken(newToken);
+    return true;
   };
 
   const logout = () => {
-    localStorage.removeItem('auth_token');
+    localStorage.removeItem('token');
     setToken(null);
   };
 

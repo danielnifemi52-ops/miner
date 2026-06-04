@@ -1,0 +1,59 @@
+# Environment files
+.env
+.env.local
+.env.development
+.env.production
+.env.*.local
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Flutter/Android
+agents/android/.dart_tool/
+agents/android/build/
+agents/android/.flutter-plugins
+agents/android/.flutter-plugins-dependencies
+agents/android/*.g.dart
+agents/android/android/local.properties
+agents/android/android/.gradle/
+agents/android/android/app/debug/
+agents/android/android/app/release/
+agents/android/android/app/profile/
+
+# XMRig binaries (too large for git)
+agents/android/assets/xmrig-arm64
+agents/windows/xmrig.exe
+agents/linux/xmrig
+
+# Agent config files (contain secrets)
+agent.conf
+install.log
+*.log
+
+# Render/Vercel
+.vercel/
