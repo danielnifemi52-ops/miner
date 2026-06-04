@@ -177,9 +177,9 @@ while ($true) {
                     Restart-Service -Name "xmrig-miner" -Force
                     Log-Message "XMRig service restarted successfully."
                 } else {
-                    # Values unchanged – no restart needed
+                    # Values unchanged - no restart needed
                     if ($LoopCount % 25 -eq 0) {
-                        Log-Message "Config sync OK – no changes (pool='$RemotePool', cpu='$RemoteCpu')"
+                        Log-Message "Config sync OK - no changes (pool='$RemotePool', cpu='$RemoteCpu')"
                     }
                 }
             }
