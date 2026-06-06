@@ -9,7 +9,6 @@ function Write-ContentNoBom ($path, $content) {
     [System.IO.File]::WriteAllText($path, $content, $utf8NoBom)
 }
 
-
 function Log-Message {
     param([string]$Message)
     $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
@@ -21,17 +20,20 @@ function Log-Message {
     if (-not (Test-Path $LogDir)) {
         New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
     }
-    Add-Content -Path $LogFile -Value $LogLine
+    
+    try {
+        Add-Content -Path $LogFile -Value $LogLine -ErrorAction SilentlyContinue
+    } catch {}
 }
 
 Log-Message "Starting XMRig Stats Reporter..."
 
+# 1. Read agent.conf to get COORDINATOR_URL, AGENT_SECRET, WORKER_ID
 if (-not (Test-Path $ConfigFile)) {
     Log-Message "Error: agent.conf not found at $ConfigFile. Exiting."
     Exit 1
 }
 
-# Load agent config
 try {
     $AgentConf = Get-Content $ConfigFile -Raw | ConvertFrom-Json
 } catch {
@@ -54,38 +56,34 @@ Log-Message "Worker ID: $WorkerId"
 # Configure security protocol for TLS 1.2/1.3
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
 
-$LoopCount = 0
-
-# Track current applied config values.
-# Read current config.json at startup.
-$currentWallet = $null
-$currentPool = $null
-$currentCpu = $null
+# 2. Read config.json ONCE at startup and store variables
+$lastPool = $null
+$lastWallet = $null
+$lastCpu = $null
 
 if (Test-Path $XmrigConfigFile) {
     try {
-        $ExistingConfig = Get-Content $XmrigConfigFile -Raw | ConvertFrom-Json
-        if ($ExistingConfig.pools -and $ExistingConfig.pools.Count -gt 0) {
-            $currentPool   = [string]$ExistingConfig.pools[0].url
-            $currentWallet = [string]$ExistingConfig.pools[0].user
+        $Config = Get-Content $XmrigConfigFile -Raw | ConvertFrom-Json
+        if ($Config.pools -and $Config.pools.Count -gt 0) {
+            $lastPool   = [string]$Config.pools[0].url
+            $lastWallet = [string]$Config.pools[0].user
         }
-        if ($ExistingConfig.cpu) {
-            $currentCpu = [string]$ExistingConfig.cpu."max-threads-hint"
+        if ($Config.cpu) {
+            $lastCpu = [string]$Config.cpu."max-threads-hint"
         }
+        Log-Message "Loaded startup config: pool='$lastPool', wallet='$lastWallet', cpu='$lastCpu'"
     } catch {
-        Log-Message "Warning: Failed to parse existing config.json at startup: $_"
+        Log-Message "Warning: Failed to parse config.json at startup: $_"
     }
 }
 
-
-
+# 3. Main loop (repeat forever)
 while ($true) {
-    # Get stats from XMRig HTTP API
+    # a. Fetch http://localhost:3333/1/summary
     $Hashrate = 0.0
     $Uptime = 0
-    
     try {
-        $Response = Invoke-RestMethod -Uri "http://127.0.0.1:18081/1/summary" -Method Get -TimeoutSec 5
+        $Response = Invoke-RestMethod -Uri "http://localhost:3333/1/summary" -Method Get -TimeoutSec 5
         if ($Response) {
             $Hashrate = $Response.hashrate.total[0]
             if ($Hashrate -eq $null) { $Hashrate = 0.0 }
@@ -93,21 +91,27 @@ while ($true) {
             if ($Uptime -eq $null) { $Uptime = 0 }
         }
     } catch {
-        # XMRig API might be down / not started yet
-        Log-Message "Warning: Failed to connect to XMRig HTTP API. Miner might be starting or stopped."
+        $Hashrate = 0.0
+        $Uptime = 0
     }
 
-    # Get system CPU load percentage
+    # b. Get CPU usage via Get-Counter
     $CpuPercent = 0.0
     try {
-        $CpuInfo = Get-CimInstance -ClassName Win32_Processor | Measure-Object -Property LoadPercentage -Average
-        $CpuPercent = $CpuInfo.Average
+        $Counter = Get-Counter -Counter "\Processor(_Total)\% Processor Time" -MaxSamples 1 -ErrorAction Stop
+        $CpuPercent = $Counter.CounterSamples[0].CookedValue
         if ($CpuPercent -eq $null) { $CpuPercent = 0.0 }
     } catch {
-        Log-Message "Warning: Failed to get CPU load percentage: $_"
+        try {
+            $CpuInfo = Get-CimInstance -ClassName Win32_Processor | Measure-Object -Property LoadPercentage -Average
+            $CpuPercent = $CpuInfo.Average
+            if ($CpuPercent -eq $null) { $CpuPercent = 0.0 }
+        } catch {
+            $CpuPercent = 0.0
+        }
     }
 
-    # Send stats to coordinator
+    # c. POST /api/stats to coordinator with X-Agent-Secret header
     try {
         $StatsBody = @{
             worker_id = [int]$WorkerId
@@ -120,108 +124,88 @@ while ($true) {
             "X-Agent-Secret" = $AgentSecret
         }
 
-        $StatsUri = "$CoordinatorUrl/api/workers/stats"
+        $StatsUri = "$CoordinatorUrl/api/stats"
         $PostResponse = Invoke-RestMethod -Uri $StatsUri -Method Post -Body $StatsBody -ContentType "application/json" -Headers $Headers -TimeoutSec 10
-        if ($PostResponse -and $PostResponse.success) {
-            # Log periodic status (every 5 loops / 5 minutes)
-            if ($LoopCount % 5 -eq 0) {
-                Log-Message "Stats reported successfully. Hashrate: $Hashrate H/s, CPU: $CpuPercent%, Uptime: $Uptime s"
-            }
-        } else {
-            Log-Message "Warning: Coordinator rejected stats: $PostResponse"
+    } catch {
+        Log-Message "Warning: Failed to POST stats to coordinator: $_"
+    }
+
+    # d. Fetch GET /api/config from coordinator
+    $newPool = $null
+    $newWallet = $null
+    $newCpu = $null
+    try {
+        $Headers = @{
+            "X-Agent-Secret" = $AgentSecret
+        }
+        $ConfigUri = "$CoordinatorUrl/api/config"
+        $RemoteConfig = Invoke-RestMethod -Uri $ConfigUri -Method Get -Headers $Headers -TimeoutSec 10
+        if ($RemoteConfig -and $RemoteConfig.pool) {
+            $newPool   = [string]$RemoteConfig.pool
+            $newWallet = [string]$RemoteConfig.wallet
+            $newCpu    = [string]$RemoteConfig.cpu_max_percent
         }
     } catch {
-        Log-Message "Error reporting stats to coordinator: $_"
+        Log-Message "Warning: Failed to fetch config from coordinator: $_"
     }
 
-    # Periodic config sync (every 5 minutes / 5 loops of 60 seconds)
-    if ($LoopCount % 5 -eq 0 -and $LoopCount -gt 0) {
-        try {
-            $Headers = @{ "X-Agent-Secret" = $AgentSecret }
-            $ConfigUri = "$CoordinatorUrl/api/config/mining"
-            $RemoteConfig = Invoke-RestMethod -Uri $ConfigUri -Method Get -Headers $Headers -TimeoutSec 10
+    # e. Compare
+    if ($null -ne $newPool) {
+        if ($newPool -ne $lastPool -or 
+            $newWallet -ne $lastWallet -or 
+            $newCpu -ne $lastCpu) {
             
-            if ($RemoteConfig -and $RemoteConfig.pool) {
-                # Cast remote values to strings for stable comparison
-                $newPool   = [string]$RemoteConfig.pool
-                $newWallet = [string]$RemoteConfig.wallet
-                $newCpu    = [string]$RemoteConfig.cpu_max_percent
+            Log-Message "Config changed, restarting XMRig"
 
-                # Read actual config.json from disk right now to compare against current state on disk
-                if (Test-Path $XmrigConfigFile) {
-                    try {
-                        $DiskConfig = Get-Content $XmrigConfigFile -Raw | ConvertFrom-Json
-                        if ($DiskConfig.pools -and $DiskConfig.pools.Count -gt 0) {
-                            $currentPool   = [string]$DiskConfig.pools[0].url
-                            $currentWallet = [string]$DiskConfig.pools[0].user
-                        }
-                        if ($DiskConfig.cpu) {
-                            $currentCpu = [string]$DiskConfig.cpu."max-threads-hint"
-                        }
-                    } catch {
-                        Log-Message "Warning: Failed to read config.json from disk: $_"
-                    }
-                }
-
-                # Only flag a change when values actually differ from what is in config.json right now
-                $ConfigChanged = (
-                    $newPool   -ne $currentPool   -or
-                    $newWallet -ne $currentWallet -or
-                    $newCpu    -ne $currentCpu
-                )
-
-                if ($ConfigChanged) {
-                    Log-Message "Configuration change detected from coordinator (pool='$newPool', wallet='$newWallet', cpu='$newCpu'). Updating local configuration..."
-                    
-                    # Load template (preferred) or fall back to current config
-                    if (Test-Path $TemplateFile) {
-                        $Template = Get-Content $TemplateFile -Raw | ConvertFrom-Json
-                    } elseif (Test-Path $XmrigConfigFile) {
-                        $Template = Get-Content $XmrigConfigFile -Raw | ConvertFrom-Json
-                    } else {
-                        Log-Message "Error: neither config-template.json nor config.json found. Skipping update."
-                        throw "No config template available"
-                    }
-
-                    # Preserve rig-id from existing config if present
-                    $RigId = $null
-                    if (Test-Path $XmrigConfigFile) {
-                        try {
-                            $Existing = Get-Content $XmrigConfigFile -Raw | ConvertFrom-Json
-                            $RigId = $Existing.pools[0]."rig-id"
-                        } catch { }
-                    }
-
-                    # Apply new settings
-                    $Template.pools[0].url  = $newPool
-                    $Template.pools[0].user = $newWallet
-                    $Template.pools[0].pass = "x"
-                    if ($RigId) { $Template.pools[0]."rig-id" = $RigId }
-                    $Template.cpu."max-threads-hint" = [int]$newCpu
-                    $Template.autosave = $false # Force autosave false to prevent XMRig from stripping max-threads-hint
-
-                    Write-ContentNoBom $XmrigConfigFile ($Template | ConvertTo-Json -Depth 10)
-
-                    # Update the $current* variables after a real change
-                    $currentPool   = $newPool
-                    $currentWallet = $newWallet
-                    $currentCpu    = $newCpu
-
-                    Log-Message "Restarting XMRig Mining Service to apply changes..."
-                    Restart-Service -Name "xmrig-miner" -Force
-                    Log-Message "XMRig service restarted successfully."
-                } else {
-                    # Values unchanged - no restart needed
-                    if ($LoopCount % 25 -eq 0) {
-                        Log-Message "Config sync OK - no changes (pool='$newPool', cpu='$newCpu')"
-                    }
-                }
+            # Load template (preferred) or fall back to current config
+            if (Test-Path $TemplateFile) {
+                $Template = Get-Content $TemplateFile -Raw | ConvertFrom-Json
+            } elseif (Test-Path $XmrigConfigFile) {
+                $Template = Get-Content $XmrigConfigFile -Raw | ConvertFrom-Json
+            } else {
+                Log-Message "Error: neither config-template.json nor config.json found. Skipping update."
+                throw "No config template available"
             }
-        } catch {
-            Log-Message "Warning: Failed to sync configuration with coordinator: $_"
+
+            # Preserve rig-id from existing config if present
+            $RigId = $null
+            if (Test-Path $XmrigConfigFile) {
+                try {
+                    $Existing = Get-Content $XmrigConfigFile -Raw | ConvertFrom-Json
+                    $RigId = $Existing.pools[0]."rig-id"
+                } catch { }
+            }
+
+            # Apply new settings
+            $Template.pools[0].url  = $newPool
+            $Template.pools[0].user = $newWallet
+            $Template.pools[0].pass = "x"
+            if ($RigId) { $Template.pools[0]."rig-id" = $RigId }
+            $Template.cpu."max-threads-hint" = [int]$newCpu
+            $Template.autosave = $false # Force autosave false to prevent XMRig from stripping max-threads-hint
+
+            Write-ContentNoBom $XmrigConfigFile ($Template | ConvertTo-Json -Depth 10)
+
+            # Restart xmrig-service (try xmrig-service, fall back to xmrig-miner)
+            try {
+                if (Get-Service -Name "xmrig-service" -ErrorAction SilentlyContinue) {
+                    Restart-Service -Name "xmrig-service" -Force
+                } else {
+                    Restart-Service -Name "xmrig-miner" -Force
+                }
+            } catch {
+                Log-Message "Error restarting service: $_"
+            }
+
+            # Update $lastPool, $lastWallet, $lastCpu
+            $lastPool = $newPool
+            $lastWallet = $newWallet
+            $lastCpu = $newCpu
+        } else {
+            Log-Message "Config unchanged, no restart needed"
         }
     }
 
-    $LoopCount++
+    # f. Sleep 60 seconds
     Start-Sleep -Seconds 60
 }
