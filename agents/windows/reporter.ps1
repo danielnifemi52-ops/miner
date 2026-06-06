@@ -57,10 +57,26 @@ Log-Message "Worker ID: $WorkerId"
 $LoopCount = 0
 
 # Track last applied remote config values to detect real changes.
-# Use sentinel values so the very first sync always writes a clean config.
-$LastKnownPool   = $null
-$LastKnownWallet = $null
-$LastKnownCpu    = $null
+# Read current config.json at startup.
+$lastWallet = $null
+$lastPool = $null
+$lastCpuMax = $null
+
+if (Test-Path $XmrigConfigFile) {
+    try {
+        $ExistingConfig = Get-Content $XmrigConfigFile -Raw | ConvertFrom-Json
+        if ($ExistingConfig.pools -and $ExistingConfig.pools.Count -gt 0) {
+            $lastPool   = [string]$ExistingConfig.pools[0].url
+            $lastWallet = [string]$ExistingConfig.pools[0].user
+        }
+        if ($ExistingConfig.cpu) {
+            $lastCpuMax = [string]$ExistingConfig.cpu."max-threads-hint"
+        }
+    } catch {
+        Log-Message "Warning: Failed to parse existing config.json at startup: $_"
+    }
+}
+
 
 while ($true) {
     # Get stats from XMRig HTTP API
@@ -132,9 +148,9 @@ while ($true) {
 
                 # Only flag a change when values actually differ from what we last applied
                 $ConfigChanged = (
-                    $RemotePool   -ne $LastKnownPool   -or
-                    $RemoteWallet -ne $LastKnownWallet  -or
-                    $RemoteCpu    -ne $LastKnownCpu
+                    $RemotePool   -ne $lastPool   -or
+                    $RemoteWallet -ne $lastWallet  -or
+                    $RemoteCpu    -ne $lastCpuMax
                 )
 
                 if ($ConfigChanged) {
@@ -169,9 +185,9 @@ while ($true) {
                     Write-ContentNoBom $XmrigConfigFile ($Template | ConvertTo-Json -Depth 10)
 
                     # Persist the values we just applied so next cycle doesn't re-trigger
-                    $LastKnownPool   = $RemotePool
-                    $LastKnownWallet = $RemoteWallet
-                    $LastKnownCpu    = $RemoteCpu
+                    $lastPool   = $RemotePool
+                    $lastWallet = $RemoteWallet
+                    $lastCpuMax = $RemoteCpu
 
                     Log-Message "Restarting XMRig Mining Service to apply changes..."
                     Restart-Service -Name "xmrig-miner" -Force
