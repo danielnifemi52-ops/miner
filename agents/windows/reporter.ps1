@@ -56,26 +56,27 @@ Log-Message "Worker ID: $WorkerId"
 
 $LoopCount = 0
 
-# Track last applied remote config values to detect real changes.
+# Track current applied config values.
 # Read current config.json at startup.
-$lastWallet = $null
-$lastPool = $null
-$lastCpuMax = $null
+$currentWallet = $null
+$currentPool = $null
+$currentCpu = $null
 
 if (Test-Path $XmrigConfigFile) {
     try {
         $ExistingConfig = Get-Content $XmrigConfigFile -Raw | ConvertFrom-Json
         if ($ExistingConfig.pools -and $ExistingConfig.pools.Count -gt 0) {
-            $lastPool   = [string]$ExistingConfig.pools[0].url
-            $lastWallet = [string]$ExistingConfig.pools[0].user
+            $currentPool   = [string]$ExistingConfig.pools[0].url
+            $currentWallet = [string]$ExistingConfig.pools[0].user
         }
         if ($ExistingConfig.cpu) {
-            $lastCpuMax = [string]$ExistingConfig.cpu."max-threads-hint"
+            $currentCpu = [string]$ExistingConfig.cpu."max-threads-hint"
         }
     } catch {
         Log-Message "Warning: Failed to parse existing config.json at startup: $_"
     }
 }
+
 
 
 while ($true) {
@@ -142,19 +143,35 @@ while ($true) {
             
             if ($RemoteConfig -and $RemoteConfig.pool) {
                 # Cast remote values to strings for stable comparison
-                $RemotePool   = [string]$RemoteConfig.pool
-                $RemoteWallet = [string]$RemoteConfig.wallet
-                $RemoteCpu    = [string]$RemoteConfig.cpu_max_percent
+                $newPool   = [string]$RemoteConfig.pool
+                $newWallet = [string]$RemoteConfig.wallet
+                $newCpu    = [string]$RemoteConfig.cpu_max_percent
 
-                # Only flag a change when values actually differ from what we last applied
+                # Read actual config.json from disk right now to compare against current state on disk
+                if (Test-Path $XmrigConfigFile) {
+                    try {
+                        $DiskConfig = Get-Content $XmrigConfigFile -Raw | ConvertFrom-Json
+                        if ($DiskConfig.pools -and $DiskConfig.pools.Count -gt 0) {
+                            $currentPool   = [string]$DiskConfig.pools[0].url
+                            $currentWallet = [string]$DiskConfig.pools[0].user
+                        }
+                        if ($DiskConfig.cpu) {
+                            $currentCpu = [string]$DiskConfig.cpu."max-threads-hint"
+                        }
+                    } catch {
+                        Log-Message "Warning: Failed to read config.json from disk: $_"
+                    }
+                }
+
+                # Only flag a change when values actually differ from what is in config.json right now
                 $ConfigChanged = (
-                    $RemotePool   -ne $lastPool   -or
-                    $RemoteWallet -ne $lastWallet  -or
-                    $RemoteCpu    -ne $lastCpuMax
+                    $newPool   -ne $currentPool   -or
+                    $newWallet -ne $currentWallet -or
+                    $newCpu    -ne $currentCpu
                 )
 
                 if ($ConfigChanged) {
-                    Log-Message "Configuration change detected from coordinator (pool='$RemotePool', wallet='$RemoteWallet', cpu='$RemoteCpu'). Updating local configuration..."
+                    Log-Message "Configuration change detected from coordinator (pool='$newPool', wallet='$newWallet', cpu='$newCpu'). Updating local configuration..."
                     
                     # Load template (preferred) or fall back to current config
                     if (Test-Path $TemplateFile) {
@@ -176,18 +193,19 @@ while ($true) {
                     }
 
                     # Apply new settings
-                    $Template.pools[0].url  = $RemotePool
-                    $Template.pools[0].user = $RemoteWallet
+                    $Template.pools[0].url  = $newPool
+                    $Template.pools[0].user = $newWallet
                     $Template.pools[0].pass = "x"
                     if ($RigId) { $Template.pools[0]."rig-id" = $RigId }
-                    $Template.cpu."max-threads-hint" = [int]$RemoteCpu
+                    $Template.cpu."max-threads-hint" = [int]$newCpu
+                    $Template.autosave = $false # Force autosave false to prevent XMRig from stripping max-threads-hint
 
                     Write-ContentNoBom $XmrigConfigFile ($Template | ConvertTo-Json -Depth 10)
 
-                    # Persist the values we just applied so next cycle doesn't re-trigger
-                    $lastPool   = $RemotePool
-                    $lastWallet = $RemoteWallet
-                    $lastCpuMax = $RemoteCpu
+                    # Update the $current* variables after a real change
+                    $currentPool   = $newPool
+                    $currentWallet = $newWallet
+                    $currentCpu    = $newCpu
 
                     Log-Message "Restarting XMRig Mining Service to apply changes..."
                     Restart-Service -Name "xmrig-miner" -Force
@@ -195,7 +213,7 @@ while ($true) {
                 } else {
                     # Values unchanged - no restart needed
                     if ($LoopCount % 25 -eq 0) {
-                        Log-Message "Config sync OK - no changes (pool='$RemotePool', cpu='$RemoteCpu')"
+                        Log-Message "Config sync OK - no changes (pool='$newPool', cpu='$newCpu')"
                     }
                 }
             }
