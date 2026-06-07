@@ -16,8 +16,13 @@ app.use(bodyParser.json());
 // Routes
 app.use("/auth", authRoutes);
 app.use("/api/config", configRoutes);
+// Mount workers router twice:
+//   /api/workers — answers GET /api/workers (dashboard)
+//   /api         — answers /api/stats, /api/register (agent endpoints)
 app.use("/api/workers", workersRoutes);
 app.use("/api", workersRoutes);
+
+
 
 // Health check (used by UptimeRobot)
 app.get("/health", (req, res) => {

@@ -49,7 +49,9 @@ router.post('/stats', authAgent, async (req, res) => {
 });
 
 // Get all workers (dashboard endpoint)
-router.get('/all', authJwt, async (req, res) => {
+// GET /api/workers  — primary route used by the dashboard
+// GET /api/workers/all — legacy alias kept for backwards compatibility
+async function handleGetWorkers(req, res) {
   try {
     const workers = await db.getWorkers();
     res.json(workers);
@@ -57,6 +59,9 @@ router.get('/all', authJwt, async (req, res) => {
     console.error('Get workers error:', error);
     res.status(500).json({ error: 'Failed to fetch workers' });
   }
-});
+}
+
+router.get('/', authJwt, handleGetWorkers);
+router.get('/all', authJwt, handleGetWorkers);
 
 module.exports = router;
