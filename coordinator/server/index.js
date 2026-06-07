@@ -16,13 +16,11 @@ app.use(bodyParser.json());
 // Routes
 app.use("/auth", authRoutes);
 app.use("/api/config", configRoutes);
-// Mount workers router twice:
-//   /api/workers — answers GET /api/workers (dashboard)
-//   /api         — answers /api/stats, /api/register (agent endpoints)
-app.use("/api/workers", workersRoutes);
+// Single mount — all worker routes live under /api/* in the router:
+//   GET  /api/workers   → router GET  /workers  (dashboard)
+//   POST /api/stats     → router POST /stats     (agent)
+//   POST /api/register  → router POST /register  (agent)
 app.use("/api", workersRoutes);
-
-
 
 // Health check (used by UptimeRobot)
 app.get("/health", (req, res) => {
@@ -40,4 +38,20 @@ app.listen(PORT, () => {
   console.log(`✓ Coordinator running on port ${PORT}`);
   console.log(`  API: http://localhost:${PORT}`);
   console.log(`  Health check: http://localhost:${PORT}/health`);
+
+  // Print all registered routes for debugging
+  console.log("\n  Registered routes:");
+  app._router.stack.forEach((layer) => {
+    if (layer.route) {
+      const methods = Object.keys(layer.route.methods).join(", ").toUpperCase();
+      console.log(`    ${methods.padEnd(6)} ${layer.route.path}`);
+    } else if (layer.name === "router" && layer.handle.stack) {
+      layer.handle.stack.forEach((r) => {
+        if (r.route) {
+          const methods = Object.keys(r.route.methods).join(", ").toUpperCase();
+          console.log(`    ${methods.padEnd(6)} [router] ${r.route.path}`);
+        }
+      });
+    }
+  });
 });

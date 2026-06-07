@@ -49,11 +49,13 @@ router.post('/stats', authAgent, async (req, res) => {
 });
 
 // Get all workers (dashboard endpoint)
-// GET /api/workers  — primary route used by the dashboard
-// GET /api/workers/all — legacy alias kept for backwards compatibility
+// GET /api/workers       — primary route (dashboard & tests)
+// GET /api/workers/all   — backwards-compatible alias
 async function handleGetWorkers(req, res) {
   try {
+    console.log('[workers] GET /workers called');
     const workers = await db.getWorkers();
+    console.log(`[workers] returning ${workers.length} workers`);
     res.json(workers);
   } catch (error) {
     console.error('Get workers error:', error);
@@ -61,7 +63,7 @@ async function handleGetWorkers(req, res) {
   }
 }
 
-router.get('/', authJwt, handleGetWorkers);
-router.get('/all', authJwt, handleGetWorkers);
+router.get('/workers', authJwt, handleGetWorkers);
+router.get('/workers/all', authJwt, handleGetWorkers);
 
 module.exports = router;
