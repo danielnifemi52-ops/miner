@@ -56,25 +56,25 @@ Log-Message "Worker ID: $WorkerId"
 # Configure security protocol for TLS 1.2/1.3
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
 
-# 2. Read config.json ONCE at startup and store variables
+# 2. Fetch startup config from coordinator (source of truth — do NOT read config.json)
 $lastPool = $null
 $lastWallet = $null
 $lastCpu = $null
 
-if (Test-Path $XmrigConfigFile) {
-    try {
-        $Config = Get-Content $XmrigConfigFile -Raw | ConvertFrom-Json
-        if ($Config.pools -and $Config.pools.Count -gt 0) {
-            $lastPool   = [string]$Config.pools[0].url
-            $lastWallet = [string]$Config.pools[0].user
-        }
-        if ($Config.cpu) {
-            $lastCpu = [string]$Config.cpu."max-threads-hint"
-        }
-        Log-Message "Loaded startup config: pool='$lastPool', wallet='$lastWallet', cpu='$lastCpu'"
-    } catch {
-        Log-Message "Warning: Failed to parse config.json at startup: $_"
+try {
+    $StartupHeaders = @{ "X-Agent-Secret" = $AgentSecret }
+    $StartupConfigUri = "$CoordinatorUrl/api/config"
+    $StartupConfig = Invoke-RestMethod -Uri $StartupConfigUri -Method Get -Headers $StartupHeaders -TimeoutSec 10
+    if ($StartupConfig -and $StartupConfig.pool) {
+        $lastPool   = [string]$StartupConfig.pool
+        $lastWallet = [string]$StartupConfig.wallet
+        $lastCpu    = [string]$StartupConfig.cpu_max_percent
+        Log-Message "Loaded startup config from coordinator: pool='$lastPool', wallet='$lastWallet', cpu='$lastCpu'"
+    } else {
+        Log-Message "Warning: Coordinator returned empty config at startup. Will initialise on first cycle."
     }
+} catch {
+    Log-Message "Warning: Failed to fetch startup config from coordinator: $_. Will initialise on first cycle."
 }
 
 # 3. Main loop (repeat forever)
@@ -126,8 +126,9 @@ while ($true) {
 
         $StatsUri = "$CoordinatorUrl/api/stats"
         $PostResponse = Invoke-RestMethod -Uri $StatsUri -Method Post -Body $StatsBody -ContentType "application/json" -Headers $Headers -TimeoutSec 10
+        Log-Message "Stats reported successfully (hashrate=$Hashrate H/s, cpu=$([math]::Round($CpuPercent,1))%)"
     } catch {
-        Log-Message "Warning: Failed to POST stats to coordinator: $_"
+        Log-Message "Error: Failed to POST stats to coordinator: $_"
     }
 
     # d. Fetch GET /api/config from coordinator
