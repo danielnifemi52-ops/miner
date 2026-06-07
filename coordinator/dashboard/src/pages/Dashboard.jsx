@@ -10,8 +10,9 @@ import './Dashboard.css';
 
 function Dashboard() {
   const { logout } = useAuth();
-  const { workers, loading, error } = useWorkers();
-  const { stats, connected } = useRealtime();
+  const { workers, loading, error, refetch } = useWorkers();
+  // Pass refetch so realtime worker INSERT/UPDATE triggers an immediate list refresh
+  const { stats, connected } = useRealtime(refetch);
   const navigate = useNavigate();
 
   const [config, setConfig] = useState(null);
@@ -68,8 +69,11 @@ function Dashboard() {
     0
   );
 
+  // Debug: log workers array on every render
+  console.log('[Dashboard] render — workers:', workers.length, workers, 'loading:', loading, 'error:', error);
+
   if (loading) {
-    return <div className="dashboard loading">Loading workers...</div>;
+    return <div className="dashboard loading">Loading workers…</div>;
   }
 
   return (
