@@ -16,6 +16,34 @@ export const useRealtime = (onWorkerChange) => {
   useEffect(() => {
     console.log('[useRealtime] Setting up Supabase realtime subscription…');
 
+    const fetchInitialStats = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('stats')
+          .select('*')
+          .order('recorded_at', { ascending: false });
+        
+        if (!error && data) {
+          const latestStats = {};
+          for (const s of data) {
+            if (!latestStats[s.worker_id]) {
+              latestStats[s.worker_id] = {
+                hashrate: s.hashrate,
+                cpu_percent: s.cpu_percent,
+                uptime_secs: s.uptime_secs,
+                recorded_at: s.recorded_at,
+              };
+            }
+          }
+          setStats(latestStats);
+        }
+      } catch (err) {
+        console.error('[useRealtime] Error fetching initial stats:', err);
+      }
+    };
+
+    fetchInitialStats();
+
     const subscription = supabase
       .channel('dashboard-realtime')
       .on(

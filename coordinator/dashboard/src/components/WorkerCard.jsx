@@ -15,7 +15,11 @@ function WorkerCard({ worker, stats }) {
     return `${mins}m`;
   };
 
-  const isOnline = stats && Object.keys(stats).length > 0;
+  const isOnline = (lastSeen) => {
+    if (!lastSeen) return false
+    const diff = Date.now() - new Date(lastSeen).getTime()
+    return diff < 5 * 60 * 1000  // 5 minutes
+  }
 
   return (
     <div className="worker-card">
@@ -24,7 +28,7 @@ function WorkerCard({ worker, stats }) {
           <h3>{worker.name}</h3>
           <span className="platform-badge">{worker.platform}</span>
         </div>
-        <StatusBadge online={isOnline} />
+        <StatusBadge online={isOnline(worker.last_seen)} />
       </div>
 
       <div className="worker-details">
