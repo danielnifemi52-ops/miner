@@ -108,10 +108,29 @@ const db = useMock ? {
   async getWorkers() {
     const { data, error } = await supabase
       .from('workers')
-      .select('*')
+      .select(`
+        *,
+        stats (
+          hashrate,
+          cpu_percent,
+          uptime_secs,
+          recorded_at
+        )
+      `)
       .order('last_seen', { ascending: false })
     if (error) throw error
-    return data || []
+    
+    return (data || []).map(worker => {
+      const latestStat = worker.stats
+        ?.sort((a, b) => new Date(b.recorded_at) - new Date(a.recorded_at))[0]
+      return {
+        ...worker,
+        hashrate: latestStat?.hashrate || 0,
+        cpu_percent: latestStat?.cpu_percent || 0,
+        uptime_secs: latestStat?.uptime_secs || 0,
+        stats: undefined
+      }
+    })
   },
 
   async getWorker(id) {
