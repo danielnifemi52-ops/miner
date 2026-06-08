@@ -109,7 +109,7 @@ function Dashboard() {
 
       <div className="workers-section">
         <h2>Active Workers</h2>
-        {workers.length === 0 ? (
+        {!Array.isArray(workers) || workers.length === 0 ? (
           <p className="no-workers">No workers registered yet</p>
         ) : (
           <div className="workers-grid">

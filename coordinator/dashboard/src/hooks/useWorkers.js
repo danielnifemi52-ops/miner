@@ -15,13 +15,11 @@ export const useWorkers = () => {
       setLoading(true);
       // Use GET /api/workers (root handler added in last server fix)
       const response = await apiClient.get('/api/workers');
-      console.log('[useWorkers] API response status:', response.status);
-      console.log('[useWorkers] API response data:', response.data);
-
-      const data = Array.isArray(response.data) ? response.data : [];
-      setWorkers(data);
+      console.log('Workers API response:', response.data)
+      const workers = response.data.workers || response.data || []
+      console.log('Workers array:', workers)
+      setWorkers(Array.isArray(workers) ? workers : Object.values(workers))
       setError(null);
-      console.log('[useWorkers] workers state set to', data.length, 'workers');
     } catch (err) {
       console.error('[useWorkers] Failed to fetch workers:', err);
       console.error('[useWorkers] Error response:', err.response?.status, err.response?.data);
