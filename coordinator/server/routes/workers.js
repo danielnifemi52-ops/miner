@@ -1,5 +1,6 @@
 const express = require('express');
 const { db } = require('../db/supabase');
+const { getWorkers } = db;
 const authAgent = require('../middleware/authAgent');
 const authJwt = require('../middleware/authJwt');
 const router = express.Router();
@@ -48,22 +49,22 @@ router.post('/stats', authAgent, async (req, res) => {
   }
 });
 
-// Get all workers (dashboard endpoint)
-// GET /api/workers       — primary route (dashboard & tests)
-// GET /api/workers/all   — backwards-compatible alias
-async function handleGetWorkers(req, res) {
+router.get('/workers', authJwt, async (req, res) => {
   try {
-    console.log('[workers] GET /workers called');
-    const workers = await db.getWorkers();
-    console.log(`[workers] returning ${workers.length} workers`);
-    res.json(workers);
-  } catch (error) {
-    console.error('Get workers error:', error);
-    res.status(500).json({ error: 'Failed to fetch workers' });
+    const workers = await getWorkers()
+    res.json({ success: true, workers })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
   }
-}
+})
 
-router.get('/workers', authJwt, handleGetWorkers);
-router.get('/workers/all', authJwt, handleGetWorkers);
+router.get('/workers/all', authJwt, async (req, res) => {
+  try {
+    const workers = await getWorkers()
+    res.json({ success: true, workers })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
 
 module.exports = router;

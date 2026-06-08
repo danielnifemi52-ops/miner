@@ -3,7 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const authRoutes = require("./routes/auth");
-const workersRoutes = require("./routes/workers");
+const workersRouter = require('./routes/workers')
 const configRoutes = require("./routes/config");
 
 const app = express();
@@ -20,7 +20,7 @@ app.use("/api/config", configRoutes);
 //   GET  /api/workers   → router GET  /workers  (dashboard)
 //   POST /api/stats     → router POST /stats     (agent)
 //   POST /api/register  → router POST /register  (agent)
-app.use("/api", workersRoutes);
+app.use('/api', workersRouter)
 
 // Health check (used by UptimeRobot)
 app.get("/health", (req, res) => {
