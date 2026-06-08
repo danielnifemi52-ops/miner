@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const ws = require('ws');
 
 const useMock = !process.env.SUPABASE_URL || process.env.SUPABASE_URL.includes('your-project');
 
@@ -6,7 +7,12 @@ let supabase = null;
 if (!useMock) {
   supabase = createClient(
     process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    {
+      realtime: {
+        transport: ws
+      }
+    }
   );
 } else {
   console.log('⚠️ SUPABASE_URL not configured. Operating in local Mock DB mode.');
