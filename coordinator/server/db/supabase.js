@@ -99,47 +99,13 @@ const db = useMock ? {
     return { key, value };
   }
 } : {
-  // Workers
   async getWorkers() {
-    // Fetch workers and their most-recent stat row in one round-trip.
-    // Supabase doesn't support DISTINCT ON via the JS client, so we fetch
-    // workers then the latest stat per worker via a subquery filter.
-    const { data: workers, error: wErr } = await supabase
+    const { data, error } = await supabase
       .from('workers')
       .select('*')
-      .order('registered_at', { ascending: false });
-    if (wErr) throw wErr;
-
-    if (!workers || workers.length === 0) return [];
-
-    // Fetch the single most-recent stat for every worker
-    const workerIds = workers.map((w) => w.id);
-    const { data: stats, error: sErr } = await supabase
-      .from('stats')
-      .select('worker_id, hashrate, cpu_percent, uptime_secs, recorded_at')
-      .in('worker_id', workerIds)
-      .order('recorded_at', { ascending: false });
-    if (sErr) {
-      // Non-fatal — return workers without stats rather than hard-failing
-      console.warn('getWorkers: failed to fetch stats:', sErr.message);
-      return workers;
-    }
-
-    // Keep only the first (latest) stat row per worker
-    const latestStatByWorker = {};
-    for (const s of stats || []) {
-      if (!latestStatByWorker[s.worker_id]) {
-        latestStatByWorker[s.worker_id] = s;
-      }
-    }
-
-    return workers.map((w) => ({
-      ...w,
-      hashrate: latestStatByWorker[w.id]?.hashrate ?? 0,
-      cpu_percent: latestStatByWorker[w.id]?.cpu_percent ?? 0,
-      uptime_secs: latestStatByWorker[w.id]?.uptime_secs ?? 0,
-      last_stat_at: latestStatByWorker[w.id]?.recorded_at ?? null,
-    }));
+      .order('last_seen', { ascending: false })
+    if (error) throw error
+    return data || []
   },
 
   async getWorker(id) {

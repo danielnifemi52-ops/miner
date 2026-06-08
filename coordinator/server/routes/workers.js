@@ -52,7 +52,7 @@ router.post('/stats', authAgent, async (req, res) => {
 router.get('/workers', authJwt, async (req, res) => {
   try {
     const workers = await getWorkers()
-    res.json({ success: true, workers })
+    res.json({ success: true, workers: workers || [] })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -61,7 +61,7 @@ router.get('/workers', authJwt, async (req, res) => {
 router.get('/workers/all', authJwt, async (req, res) => {
   try {
     const workers = await getWorkers()
-    res.json({ success: true, workers })
+    res.json({ success: true, workers: workers || [] })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
