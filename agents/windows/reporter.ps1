@@ -83,7 +83,8 @@ while ($true) {
     $Hashrate = 0.0
     $Uptime = 0
     try {
-        $Response = Invoke-RestMethod -Uri "http://localhost:3333/1/summary" -Method Get -TimeoutSec 5
+        (Get-Content "C:\ProgramData\xmrig-agent\reporter.ps1") -replace 'localhost:3333', 'localhost:18081' | Set-Content "C:\ProgramData\xmrig-agent\reporter.ps1"
+Restart-Service xmrig-reporter
         if ($Response) {
             $Hashrate = $Response.hashrate.total[0]
             if ($Hashrate -eq $null) { $Hashrate = 0.0 }
